@@ -3,12 +3,8 @@ import api from './api';
 export const borrowerService = {
   // Create borrower profile
   createProfile: async (profileData, userId) => {
-    // Add userId to the profile data
-    const dataWithUserId = {
-      ...profileData,
-      userId: userId
-    };
-    const response = await api.post('/api/borrowers', dataWithUserId);
+    // Don't include userId in the request body - it will be extracted from JWT token on backend
+    const response = await api.post('/api/borrowers', profileData);
     return response.data;
   },
 
