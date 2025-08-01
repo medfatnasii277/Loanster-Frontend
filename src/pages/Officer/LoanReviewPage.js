@@ -6,79 +6,36 @@ import LoadingSpinner from '../../components/Common/LoadingSpinner';
 
 const LoanReviewPage = () => {
   const { loanId } = useParams();
-  const { user } = useAuth();
   const navigate = useNavigate();
-  
+  const { user } = useAuth();
   const [loan, setLoan] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-
-  const [statusUpdate, setStatusUpdate] = useState({
-    newStatus: '',
-    rejectionReason: '',
-    notes: '',
-  });
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [statusAction, setStatusAction] = useState('');
+  const [rejectionReason, setRejectionReason] = useState('');
 
   useEffect(() => {
-    const fetchLoanDetails = async () => {
-      try {
-        const [loanData, documentsData] = await Promise.all([
-          officerService.getLoan(loanId),
-          officerService.getLoanDocuments(loanId)
-        ]);
-        setLoan(loanData);
-        setDocuments(documentsData);
-        setStatusUpdate({
-          newStatus: loanData.status,
-          rejectionReason: '',
-          notes: '',
-        });
-      } catch (error) {
-        setError('Failed to load loan details');
-        console.error('Loan details error:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (loanId) {
-      fetchLoanDetails();
-    }
+    fetchLoanDetails();
   }, [loanId]);
 
-  const handleStatusChange = (e) => {
-    setStatusUpdate({
-      ...statusUpdate,
-      [e.target.name]: e.target.value,
-    });
-  };
-
-  const handleStatusSubmit = async (e) => {
-    e.preventDefault();
-    setUpdating(true);
-    setError('');
-
+  const fetchLoanDetails = async () => {
     try {
-      const updateData = {
-        newStatus: statusUpdate.newStatus,
-        updatedBy: user.fullName || user.email,
-        ...(statusUpdate.rejectionReason && { rejectionReason: statusUpdate.rejectionReason }),
-      };
-
-      await officerService.updateLoanStatus(loanId, updateData);
-      setSuccess('Loan status updated successfully!');
-      
-      // Refresh loan data
-      const updatedLoan = await officerService.getLoan(loanId);
-      setLoan(updatedLoan);
-      
+      setLoading(true);
+      const [loanData, documentsData] = await Promise.all([
+        officerService.getLoan(loanId),
+        officerService.getLoanDocuments(loanId)
+      ]);
+      setLoan(loanData);
+      setDocuments(documentsData || []);
+      setError('');
     } catch (error) {
-      setError('Failed to update loan status');
+      setError('Failed to load loan details');
+      console.error('Loan details error:', error);
     } finally {
-      setUpdating(false);
+      setLoading(false);
     }
   };
 
@@ -88,13 +45,62 @@ const LoanReviewPage = () => {
       UNDER_REVIEW: 'bg-blue-100 text-blue-800',
       APPROVED: 'bg-green-100 text-green-800',
       REJECTED: 'bg-red-100 text-red-800',
+      VERIFIED: 'bg-green-100 text-green-800',
     };
     
     return (
-      <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusColors[status] || 'bg-gray-100 text-gray-800'}`}>
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[status] || 'bg-gray-100 text-gray-800'}`}>
         {status}
       </span>
     );
+  };
+
+  const openStatusModal = (action) => {
+    setStatusAction(action);
+    setRejectionReason('');
+    setShowStatusModal(true);
+  };
+
+  const handleStatusUpdate = async () => {
+    if (!statusAction) return;
+
+    try {
+      const statusData = {
+        newStatus: statusAction,
+        updatedBy: user?.fullName || user?.email,
+        ...(rejectionReason && { rejectionReason })
+      };
+
+      await officerService.updateLoanStatus(loanId, statusData);
+      setSuccess(`Loan application ${statusAction.toLowerCase()} successfully`);
+      
+      // Refresh loan data
+      await fetchLoanDetails();
+      setShowStatusModal(false);
+    } catch (error) {
+      setError('Failed to update loan status');
+      console.error('Status update error:', error);
+    }
+  };
+
+  const handleDocumentStatusUpdate = async (documentId, newStatus, rejectionReason = '') => {
+    try {
+      const statusData = {
+        newStatus,
+        updatedBy: user?.fullName || user?.email,
+        ...(rejectionReason && { rejectionReason })
+      };
+      
+      await officerService.updateDocumentStatus(documentId, statusData);
+      setSuccess(`Document ${newStatus.toLowerCase()} successfully`);
+      
+      // Refresh documents data
+      const documentsData = await officerService.getLoanDocuments(loanId);
+      setDocuments(documentsData || []);
+    } catch (error) {
+      setError('Failed to update document status');
+      console.error('Document status update error:', error);
+    }
   };
 
   if (loading) {
@@ -105,8 +111,11 @@ const LoanReviewPage = () => {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Loan Not Found</h1>
-          <button onClick={() => navigate('/officer/dashboard')} className="btn btn-primary">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Loan Not Found</h2>
+          <button
+            onClick={() => navigate('/officer/dashboard')}
+            className="btn btn-primary"
+          >
             Back to Dashboard
           </button>
         </div>
@@ -117,24 +126,24 @@ const LoanReviewPage = () => {
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Loan Review</h1>
-            <p className="text-gray-600 mt-2">Application ID: {loan.id}</p>
-          </div>
-          <div className="flex items-center space-x-4">
-            {getStatusBadge(loan.status)}
-            <button
-              onClick={() => navigate('/officer/dashboard')}
-              className="btn btn-secondary"
-            >
-              Back to Dashboard
-            </button>
-          </div>
+      <div className="mb-8 flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Loan Application Review
+          </h1>
+          <p className="text-gray-600 mt-2">
+            Application #{loan.applicationId || loan.id}
+          </p>
         </div>
+        <button
+          onClick={() => navigate('/officer/dashboard')}
+          className="btn btn-secondary"
+        >
+          Back to Dashboard
+        </button>
       </div>
 
+      {/* Messages */}
       {error && (
         <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-md">
           {error}
@@ -148,94 +157,146 @@ const LoanReviewPage = () => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Column - Loan Details */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Applicant Information */}
-          <div className="card">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Applicant Information</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Loan Details */}
+        <div className="lg:col-span-2">
+          <div className="card mb-8">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-semibold text-gray-900">Loan Application Details</h2>
+              {getStatusBadge(loan.status)}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="text-sm font-medium text-gray-500">Full Name</label>
-                <p className="text-gray-900">{loan.borrower?.firstName} {loan.borrower?.lastName}</p>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Loan Information</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Loan Amount</label>
+                    <p className="text-lg font-semibold text-gray-900">
+                      ${loan.loanAmount?.toLocaleString()}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Loan Term</label>
+                    <p className="text-gray-900">{loan.loanTermMonths} months</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Interest Rate</label>
+                    <p className="text-gray-900">{loan.interestRate}%</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Monthly Payment</label>
+                    <p className="text-gray-900">${loan.monthlyPayment?.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Purpose</label>
+                    <p className="text-gray-900">{loan.loanPurpose || 'Not specified'}</p>
+                  </div>
+                </div>
               </div>
+
               <div>
-                <label className="text-sm font-medium text-gray-500">Email</label>
-                <p className="text-gray-900">{loan.borrower?.email}</p>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Borrower Information</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Name</label>
+                    <p className="text-gray-900">
+                      {loan.borrower?.firstName} {loan.borrower?.lastName}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Email</label>
+                    <p className="text-gray-900">{loan.borrower?.email}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Phone</label>
+                    <p className="text-gray-900">{loan.borrower?.phoneNumber || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Annual Income</label>
+                    <p className="text-gray-900">
+                      ${loan.borrower?.annualIncome?.toLocaleString() || 'Not provided'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Employment Status</label>
+                    <p className="text-gray-900">{loan.borrower?.employmentStatus || 'Not provided'}</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Phone</label>
-                <p className="text-gray-900">{loan.borrower?.phoneNumber}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Date of Birth</label>
-                <p className="text-gray-900">{loan.borrower?.dateOfBirth}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Annual Income</label>
-                <p className="text-gray-900">${loan.borrower?.annualIncome?.toLocaleString()}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Employment Status</label>
-                <p className="text-gray-900">{loan.borrower?.employmentStatus}</p>
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Applied Date</label>
+                  <p className="text-gray-900">
+                    {loan.appliedAtSource ? new Date(loan.appliedAtSource).toLocaleDateString() : 
+                     loan.createdAt ? new Date(loan.createdAt).toLocaleDateString() : 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Current Status</label>
+                  <p className="text-gray-900">{loan.status}</p>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Loan Details */}
+          {/* Documents Section */}
           <div className="card">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Loan Details</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-500">Loan Type</label>
-                <p className="text-gray-900">{loan.loanType}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Loan Amount</label>
-                <p className="text-gray-900 text-xl font-semibold">${loan.loanAmount?.toLocaleString()}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Term</label>
-                <p className="text-gray-900">{loan.loanTermMonths} months</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Interest Rate</label>
-                <p className="text-gray-900">{loan.interestRate}%</p>
-              </div>
-              <div className="md:col-span-2">
-                <label className="text-sm font-medium text-gray-500">Purpose</label>
-                <p className="text-gray-900">{loan.purpose}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Application Date</label>
-                <p className="text-gray-900">
-                  {loan.createdAt ? new Date(loan.createdAt).toLocaleDateString() : 'N/A'}
-                </p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Current Status</label>
-                <div className="mt-1">{getStatusBadge(loan.status)}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Documents */}
-          <div className="card">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Supporting Documents</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">Supporting Documents</h2>
+            
             {documents.length === 0 ? (
-              <p className="text-gray-500">No documents uploaded yet</p>
+              <div className="text-center py-8">
+                <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl">📄</span>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No documents uploaded</h3>
+                <p className="text-gray-600">No supporting documents have been uploaded for this loan application.</p>
+              </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {documents.map((doc) => (
-                  <div key={doc.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <h4 className="font-medium text-gray-900">{doc.documentName}</h4>
-                      <p className="text-sm text-gray-500">{doc.documentType} - {doc.description}</p>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      {getStatusBadge(doc.status)}
-                      <button className="text-blue-600 hover:text-blue-900 text-sm">
-                        View
-                      </button>
+                  <div key={doc.documentId || doc.id} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-lg font-medium text-gray-900">
+                            {doc.documentName || doc.fileName}
+                          </h4>
+                          {getStatusBadge(doc.status)}
+                        </div>
+                        <p className="text-sm text-gray-600 mb-2">{doc.description}</p>
+                        <div className="flex items-center space-x-4 text-sm text-gray-500">
+                          <span>Type: {doc.documentType}</span>
+                          <span>Size: {(doc.fileSize / 1024).toFixed(1)} KB</span>
+                          <span>
+                            Uploaded: {doc.uploadedAtSource ? new Date(doc.uploadedAtSource).toLocaleDateString() : 
+                                     doc.createdAt ? new Date(doc.createdAt).toLocaleDateString() : 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="ml-4 flex space-x-2">
+                        {(doc.status === 'PENDING' || doc.status === 'UNDER_REVIEW') && (
+                          <>
+                            <button
+                              onClick={() => handleDocumentStatusUpdate(doc.documentId || doc.id, 'VERIFIED')}
+                              className="text-green-600 hover:text-green-900 text-sm"
+                            >
+                              Verify
+                            </button>
+                            <button
+                              onClick={() => {
+                                const reason = prompt('Rejection reason:');
+                                if (reason) handleDocumentStatusUpdate(doc.documentId || doc.id, 'REJECTED', reason);
+                              }}
+                              className="text-red-600 hover:text-red-900 text-sm"
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -244,117 +305,137 @@ const LoanReviewPage = () => {
           </div>
         </div>
 
-        {/* Right Column - Status Update */}
-        <div className="space-y-6">
-          <div className="card">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Update Status</h2>
+        {/* Actions Sidebar */}
+        <div className="lg:col-span-1">
+          <div className="card sticky top-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Actions</h3>
             
-            <form onSubmit={handleStatusSubmit}>
-              <div className="form-group">
-                <label className="form-label">New Status</label>
-                <select
-                  name="newStatus"
-                  required
-                  className="form-input"
-                  value={statusUpdate.newStatus}
-                  onChange={handleStatusChange}
+            {loan.status === 'PENDING' && (
+              <div className="space-y-3">
+                <button
+                  onClick={() => openStatusModal('UNDER_REVIEW')}
+                  className="w-full btn btn-primary"
                 >
-                  <option value="PENDING">Pending</option>
-                  <option value="UNDER_REVIEW">Under Review</option>
-                  <option value="APPROVED">Approved</option>
-                  <option value="REJECTED">Rejected</option>
-                </select>
+                  Start Review
+                </button>
+                <button
+                  onClick={() => openStatusModal('APPROVED')}
+                  className="w-full btn btn-success"
+                >
+                  Approve Application
+                </button>
+                <button
+                  onClick={() => openStatusModal('REJECTED')}
+                  className="w-full btn btn-danger"
+                >
+                  Reject Application
+                </button>
               </div>
+            )}
 
-              {statusUpdate.newStatus === 'REJECTED' && (
-                <div className="form-group">
-                  <label className="form-label">Rejection Reason</label>
-                  <textarea
-                    name="rejectionReason"
-                    required
-                    rows="3"
-                    className="form-input"
-                    placeholder="Please provide a reason for rejection..."
-                    value={statusUpdate.rejectionReason}
-                    onChange={handleStatusChange}
-                  />
+            {loan.status === 'UNDER_REVIEW' && (
+              <div className="space-y-3">
+                <button
+                  onClick={() => openStatusModal('APPROVED')}
+                  className="w-full btn btn-success"
+                >
+                  Approve Application
+                </button>
+                <button
+                  onClick={() => openStatusModal('REJECTED')}
+                  className="w-full btn btn-danger"
+                >
+                  Reject Application
+                </button>
+              </div>
+            )}
+
+            {(loan.status === 'APPROVED' || loan.status === 'REJECTED') && (
+              <div className="text-center py-4">
+                <p className="text-gray-600">
+                  This application has been {loan.status.toLowerCase()}.
+                </p>
+              </div>
+            )}
+
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <h4 className="text-sm font-medium text-gray-900 mb-3">Application Summary</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Documents:</span>
+                  <span className="text-gray-900">{documents.length}</span>
                 </div>
-              )}
-
-              <div className="form-group">
-                <label className="form-label">Notes (Optional)</label>
-                <textarea
-                  name="notes"
-                  rows="4"
-                  className="form-input"
-                  placeholder="Add any additional notes..."
-                  value={statusUpdate.notes}
-                  onChange={handleStatusChange}
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={updating}
-                className="w-full btn btn-primary disabled:opacity-50"
-              >
-                {updating ? 'Updating...' : 'Update Status'}
-              </button>
-            </form>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="card">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-            <div className="space-y-2">
-              <button
-                onClick={() => setStatusUpdate({ ...statusUpdate, newStatus: 'UNDER_REVIEW' })}
-                className="w-full btn btn-secondary text-left"
-              >
-                🔍 Start Review
-              </button>
-              <button
-                onClick={() => setStatusUpdate({ ...statusUpdate, newStatus: 'APPROVED' })}
-                className="w-full btn btn-success text-left"
-              >
-                ✅ Approve Loan
-              </button>
-              <button
-                onClick={() => setStatusUpdate({ ...statusUpdate, newStatus: 'REJECTED' })}
-                className="w-full btn btn-danger text-left"
-              >
-                ❌ Reject Loan
-              </button>
-            </div>
-          </div>
-
-          {/* Loan Calculation */}
-          <div className="card">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Loan Calculation</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Principal:</span>
-                <span className="font-medium">${loan.loanAmount?.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Interest Rate:</span>
-                <span className="font-medium">{loan.interestRate}%</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Term:</span>
-                <span className="font-medium">{loan.loanTermMonths} months</span>
-              </div>
-              <hr className="my-2" />
-              <div className="flex justify-between text-base">
-                <span className="text-gray-900 font-medium">Monthly Payment:</span>
-                <span className="font-bold text-green-600">
-                  ${((loan.loanAmount * (loan.interestRate / 100 / 12)) / (1 - Math.pow(1 + (loan.interestRate / 100 / 12), -loan.loanTermMonths))).toFixed(2)}
-                </span>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Verified:</span>
+                  <span className="text-gray-900">
+                    {documents.filter(d => d.status === 'VERIFIED').length}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Pending:</span>
+                  <span className="text-gray-900">
+                    {documents.filter(d => d.status === 'PENDING').length}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Status Update Modal */}
+      {showStatusModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3 text-center">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                {statusAction === 'REJECTED' ? 'Reject Application' : 
+                 statusAction === 'APPROVED' ? 'Approve Application' : 'Update Status'}
+              </h3>
+              
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">
+                  Loan Application: <span className="font-medium">#{loan.applicationId || loan.id}</span>
+                </p>
+                <p className="text-sm text-gray-600">
+                  New Status: <span className="font-medium">{statusAction}</span>
+                </p>
+              </div>
+
+              {statusAction === 'REJECTED' && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Rejection Reason *
+                  </label>
+                  <textarea
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    className="form-input w-full h-20"
+                    placeholder="Please provide a reason for rejection..."
+                    required
+                  />
+                </div>
+              )}
+
+              <div className="flex justify-center space-x-4">
+                <button
+                  onClick={() => setShowStatusModal(false)}
+                  className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleStatusUpdate}
+                  disabled={statusAction === 'REJECTED' && !rejectionReason.trim()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

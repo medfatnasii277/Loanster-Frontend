@@ -10,9 +10,11 @@ export const authService = {
   // Login user
   login: async (credentials) => {
     const response = await api.post('/auth/login', credentials);
+    console.log('🔑 Login response:', response.data);
     if (response.data.token) {
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
+      console.log('🔑 Stored user in localStorage:', response.data.user);
     }
     return response.data;
   },
@@ -26,7 +28,10 @@ export const authService = {
   // Get current user from localStorage
   getCurrentUser: () => {
     const user = localStorage.getItem('user');
-    return user ? JSON.parse(user) : null;
+    const parsedUser = user ? JSON.parse(user) : null;
+    console.log('👤 getCurrentUser - Raw from localStorage:', user);
+    console.log('👤 getCurrentUser - Parsed user:', parsedUser);
+    return parsedUser;
   },
 
   // Check if user is authenticated

@@ -3,29 +3,28 @@ import { useAuth } from '../../contexts/AuthContext';
 import borrowerService from '../../services/borrowerService';
 
 const LoanApplicationPage = () => {
-  const { user } = useAuth();
+  const { user, borrowerProfile, hasProfile, borrowerId: authBorrowerId, refreshBorrowerProfile } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [borrowerId, setBorrowerId] = useState(null); // Store borrower ID
   
   // Profile data
   const [profileData, setProfileData] = useState({
-    firstName: '',
-    lastName: '',
+    firstName: borrowerProfile?.firstName || '',
+    lastName: borrowerProfile?.lastName || '',
     email: user?.email || '',
-    phoneNumber: '',
-    dateOfBirth: '',
-    ssn: '',
-    address: '',
-    city: '',
-    state: '',
-    zipCode: '',
-    annualIncome: '',
-    employmentStatus: 'EMPLOYED',
-    employerName: '',
-    employmentYears: '',
+    phoneNumber: borrowerProfile?.phoneNumber || '',
+    dateOfBirth: borrowerProfile?.dateOfBirth || '',
+    ssn: borrowerProfile?.ssn || '',
+    address: borrowerProfile?.address || '',
+    city: borrowerProfile?.city || '',
+    state: borrowerProfile?.state || '',
+    zipCode: borrowerProfile?.zipCode || '',
+    annualIncome: borrowerProfile?.annualIncome || '',
+    employmentStatus: borrowerProfile?.employmentStatus || 'EMPLOYED',
+    employerName: borrowerProfile?.employerName || '',
+    employmentYears: borrowerProfile?.employmentYears || '',
   });
 
   // Loan application data
@@ -37,27 +36,37 @@ const LoanApplicationPage = () => {
     purpose: '',
   });
 
-  // Check if profile already exists
+  // Skip to loan application step if profile already exists
   useEffect(() => {
-    const checkProfile = async () => {
-      if (user?.userId) {
-        try {
-          const borrower = await borrowerService.getBorrowerByUserId(user.userId);
-          if (borrower) {
-            setProfileData(borrower);
-            setBorrowerId(borrower.id); // Store borrower ID
-            setStep(2); // Skip to loan application if profile exists
-          }
-        } catch (error) {
-          // Profile doesn't exist, start with step 1 (404 is expected)
-          if (error.response?.status !== 404) {
-            console.error('Error checking existing profile:', error);
-          }
-        }
-      }
-    };
-    checkProfile();
-  }, [user]);
+    if (hasProfile && authBorrowerId) {
+      console.log('✅ Profile exists, skipping to loan application step');
+      setStep(2);
+      setSuccess('Profile found! You can now apply for a loan.');
+    }
+  }, [hasProfile, authBorrowerId]);
+
+  // Load existing profile data if available
+  useEffect(() => {
+    if (borrowerProfile) {
+      console.log('📋 Loading existing profile data:', borrowerProfile);
+      setProfileData({
+        firstName: borrowerProfile.firstName || '',
+        lastName: borrowerProfile.lastName || '',
+        email: user?.email || '',
+        phoneNumber: borrowerProfile.phoneNumber || '',
+        dateOfBirth: borrowerProfile.dateOfBirth || '',
+        ssn: borrowerProfile.ssn || '',
+        address: borrowerProfile.address || '',
+        city: borrowerProfile.city || '',
+        state: borrowerProfile.state || '',
+        zipCode: borrowerProfile.zipCode || '',
+        annualIncome: borrowerProfile.annualIncome || '',
+        employmentStatus: borrowerProfile.employmentStatus || 'EMPLOYED',
+        employerName: borrowerProfile.employerName || '',
+        employmentYears: borrowerProfile.employmentYears || '',
+      });
+    }
+  }, [borrowerProfile, user?.email]);
 
   const handleProfileChange = (e) => {
     setProfileData({
@@ -78,13 +87,26 @@ const LoanApplicationPage = () => {
     setLoading(true);
     setError('');
 
+    console.log('Creating borrower profile...');
+    console.log('Profile data:', profileData);
+    console.log('User:', user);
+
     try {
-      const response = await borrowerService.createProfile(profileData, user.userId);
-      setBorrowerId(response.id); // Store the borrower ID from response
+      const response = await borrowerService.createProfile(profileData);
+      console.log('Profile created successfully:', response);
+      
+      // Refresh the borrower profile in auth context
+      await refreshBorrowerProfile();
+      
       setStep(2);
       setSuccess('Profile created successfully! Now you can apply for a loan.');
     } catch (error) {
-      setError(error.response?.data?.message || 'Failed to create profile');
+      console.error('Profile creation failed:', error);
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          error.message || 
+                          'Failed to create profile';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -95,6 +117,17 @@ const LoanApplicationPage = () => {
     setLoading(true);
     setError('');
 
+    console.log('Starting loan application submission...');
+    console.log('User:', user);
+    console.log('Borrower ID:', authBorrowerId);
+    console.log('Loan Data:', loanData);
+
+    if (!authBorrowerId) {
+      setError('Borrower profile not found. Please create a profile first.');
+      setLoading(false);
+      return;
+    }
+
     try {
       const loanApplication = {
         ...loanData,
@@ -103,11 +136,25 @@ const LoanApplicationPage = () => {
         interestRate: parseFloat(loanData.interestRate),
       };
 
-      await borrowerService.submitLoanApplication(borrowerId, loanApplication); // Use borrowerId
+      console.log('Submitting loan application:', loanApplication);
+      console.log('Using borrower ID from auth context:', authBorrowerId);
+      
+      if (!authBorrowerId) {
+        throw new Error('Borrower ID not found. Please ensure your profile is complete.');
+      }
+      
+      const response = await borrowerService.submitLoanApplication(authBorrowerId, loanApplication);
+      console.log('Loan application submitted successfully:', response);
+      
       setSuccess('Loan application submitted successfully!');
       setStep(3);
     } catch (error) {
-      setError(error.response?.data?.message || 'Failed to submit loan application');
+      console.error('Loan application submission failed:', error);
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          error.message || 
+                          'Failed to submit loan application';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

@@ -17,18 +17,27 @@ import LoadingSpinner from './components/Common/LoadingSpinner';
 function ProtectedRoute({ children, requiredRole }) {
   const { user, loading } = useAuth();
   
+  console.log('🛡️ ProtectedRoute - User:', user);
+  console.log('🛡️ ProtectedRoute - Required role:', requiredRole);
+  console.log('🛡️ ProtectedRoute - User role:', user?.role);
+  console.log('🛡️ ProtectedRoute - Loading:', loading);
+  
   if (loading) {
+    console.log('🛡️ ProtectedRoute - Still loading, showing spinner');
     return <LoadingSpinner />;
   }
   
   if (!user) {
+    console.log('🛡️ ProtectedRoute - No user, redirecting to login');
     return <Navigate to="/login" replace />;
   }
   
   if (requiredRole && user.role !== requiredRole) {
+    console.log('🛡️ ProtectedRoute - Role mismatch, redirecting to home');
     return <Navigate to="/" replace />;
   }
   
+  console.log('🛡️ ProtectedRoute - Access granted, rendering children');
   return children;
 }
 
@@ -49,6 +58,9 @@ function AppLayout({ children }) {
 function AppRouter() {
   const { user } = useAuth();
   
+  console.log('🌟 AppRouter - Current user:', user);
+  console.log('🌟 AppRouter - User role:', user?.role);
+  
   return (
     <Router>
       <Routes>
@@ -61,12 +73,21 @@ function AppRouter() {
           <AppLayout>
             {user ? (
               user.role === 'BORROWER' ? (
-                <Navigate to="/borrower/dashboard" replace />
+                (() => {
+                  console.log('🚀 Redirecting BORROWER to dashboard');
+                  return <Navigate to="/borrower/dashboard" replace />;
+                })()
               ) : (
-                <Navigate to="/officer/dashboard" replace />
+                (() => {
+                  console.log('🚀 Redirecting OFFICER to dashboard');
+                  return <Navigate to="/officer/dashboard" replace />;
+                })()
               )
             ) : (
-              <Navigate to="/login" replace />
+              (() => {
+                console.log('🚀 No user, redirecting to login');
+                return <Navigate to="/login" replace />;
+              })()
             )}
           </AppLayout>
         } />

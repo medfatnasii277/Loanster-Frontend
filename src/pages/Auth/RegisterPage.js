@@ -15,7 +15,7 @@ const RegisterPage = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   
-  const { register } = useAuth();
+  const { register, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -47,11 +47,20 @@ const RegisterPage = () => {
 
     try {
       const { confirmPassword, ...registrationData } = formData;
-      await register(registrationData);
-      setSuccess('Registration successful! Please login with your credentials.');
-      setTimeout(() => {
-        navigate('/login');
-      }, 2000);
+      const response = await register(registrationData);
+      
+      // If user registered as BORROWER and was auto-logged in, redirect to dashboard
+      if (registrationData.role === 'BORROWER' && isAuthenticated) {
+        setSuccess('Registration successful! Profile created automatically. Redirecting to dashboard...');
+        setTimeout(() => {
+          navigate('/borrower/dashboard');
+        }, 2000);
+      } else {
+        setSuccess('Registration successful! Please login with your credentials.');
+        setTimeout(() => {
+          navigate('/login');
+        }, 2000);
+      }
     } catch (error) {
       setError(error.response?.data?.message || 'Registration failed. Please try again.');
     } finally {

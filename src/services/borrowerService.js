@@ -1,9 +1,9 @@
 import api from './api';
 
 export const borrowerService = {
-  // Create borrower profile
-  createProfile: async (profileData, userId) => {
-    // Don't include userId in the request body - it will be extracted from JWT token on backend
+    // Create borrower profile
+  createProfile: async (profileData) => {
+    // Don't add userId - it will be extracted from JWT token automatically
     const response = await api.post('/api/borrowers', profileData);
     return response.data;
   },
@@ -11,6 +11,12 @@ export const borrowerService = {
   // Get borrower by user ID
   getBorrowerByUserId: async (userId) => {
     const response = await api.get(`/api/borrowers/user/${userId}`);
+    return response.data;
+  },
+
+  // Get borrower by email
+  getBorrowerByEmail: async (email) => {
+    const response = await api.get(`/api/borrowers/email/${email}`);
     return response.data;
   },
 
@@ -22,19 +28,21 @@ export const borrowerService = {
 
   // Submit loan application
   submitLoanApplication: async (borrowerId, loanData) => {
-    const response = await api.post(`/api/borrowers/${borrowerId}/loan-applications`, loanData);
+    console.log('Submitting loan application:', { borrowerId, loanData });
+    const response = await api.post(`/api/borrowers/${borrowerId}/loans`, loanData);
+    console.log('Loan application response:', response.data);
     return response.data;
   },
 
   // Get loan applications for borrower
   getLoanApplications: async (borrowerId) => {
-    const response = await api.get(`/api/borrowers/${borrowerId}/loan-applications`);
+    const response = await api.get(`/api/borrowers/${borrowerId}/loans`);
     return response.data;
   },
 
   // Get specific loan application
   getLoanApplication: async (borrowerId, loanId) => {
-    const response = await api.get(`/api/borrowers/${borrowerId}/loan-applications/${loanId}`);
+    const response = await api.get(`/api/borrowers/${borrowerId}/loans/${loanId}`);
     return response.data;
   },
 

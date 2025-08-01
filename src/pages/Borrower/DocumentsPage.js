@@ -4,7 +4,7 @@ import borrowerService from '../../services/borrowerService';
 import LoadingSpinner from '../../components/Common/LoadingSpinner';
 
 const DocumentsPage = () => {
-  const { user } = useAuth();
+  const { user, borrowerProfile, hasProfile, borrowerId } = useAuth();
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -21,8 +21,9 @@ const DocumentsPage = () => {
   useEffect(() => {
     const fetchDocuments = async () => {
       try {
-        if (user?.userId) {
-          const documentsData = await borrowerService.getDocuments(user.userId);
+        if (hasProfile && borrowerId) {
+          console.log('📄 Fetching documents for borrower ID:', borrowerId);
+          const documentsData = await borrowerService.getDocuments(borrowerId);
           setDocuments(documentsData);
         }
       } catch (error) {
@@ -35,7 +36,7 @@ const DocumentsPage = () => {
     };
 
     fetchDocuments();
-  }, [user]);
+  }, [hasProfile, borrowerId]); // Re-run when profile status changes
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -43,6 +44,12 @@ const DocumentsPage = () => {
       ...uploadData,
       [name]: value,
     });
+    
+    // Clear messages when user starts typing
+    if (error || success) {
+      setError('');
+      setSuccess('');
+    }
   };
 
   const handleFileChange = (e) => {
@@ -50,17 +57,25 @@ const DocumentsPage = () => {
       ...uploadData,
       file: e.target.files[0],
     });
+    
+    // Clear messages when user selects a file
+    if (error || success) {
+      setError('');
+      setSuccess('');
+    }
   };
 
   const handleUpload = async (e) => {
     e.preventDefault();
     if (!uploadData.file) {
       setError('Please select a file to upload');
+      setSuccess(''); // Clear success message when showing error
       return;
     }
 
     setUploading(true);
-    setError('');
+    setError(''); // Clear previous messages
+    setSuccess('');
 
     try {
       const formData = new FormData();
@@ -69,8 +84,16 @@ const DocumentsPage = () => {
       formData.append('documentType', uploadData.documentType);
       formData.append('description', uploadData.description);
 
-      await borrowerService.uploadDocument(user.userId, formData);
+      console.log('📤 Uploading document for borrower ID:', borrowerId);
+      
+      if (!borrowerId) {
+        setError('Borrower profile not found. Please complete your profile first.');
+        return;
+      }
+
+      await borrowerService.uploadDocument(borrowerId, formData);
       setSuccess('Document uploaded successfully!');
+      setError(''); // Clear any previous errors
       
       // Reset form
       setUploadData({
@@ -81,11 +104,12 @@ const DocumentsPage = () => {
       });
       
       // Refresh documents list
-      const documentsData = await borrowerService.getDocuments(user.userId);
+      const documentsData = await borrowerService.getDocuments(borrowerId);
       setDocuments(documentsData);
       
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to upload document');
+      setSuccess(''); // Clear any previous success message
     } finally {
       setUploading(false);
     }
@@ -108,6 +132,34 @@ const DocumentsPage = () => {
 
   if (loading) {
     return <LoadingSpinner message="Loading documents..." />;
+  }
+
+  // Show profile completion message if no profile exists
+  if (!hasProfile) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Documents</h1>
+          <p className="text-gray-600 mt-2">Upload and manage your loan application documents</p>
+        </div>
+        
+        <div className="card p-8 text-center">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-3xl">📋</span>
+          </div>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">Complete Your Profile First</h3>
+          <p className="text-gray-600 mb-6">
+            You need to complete your borrower profile before you can upload documents.
+          </p>
+          <a 
+            href="/borrower/apply" 
+            className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            Complete Profile
+          </a>
+        </div>
+      </div>
+    );
   }
 
   return (
