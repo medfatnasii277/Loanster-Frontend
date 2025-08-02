@@ -17,6 +17,10 @@ const OfficerDashboard = () => {
   const [selectedItem, setSelectedItem] = useState(null);
   const [statusAction, setStatusAction] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewItem, setReviewItem] = useState(null);
+  const [reviewItemType, setReviewItemType] = useState('');
+  const [reviewLoading, setReviewLoading] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -43,6 +47,31 @@ const OfficerDashboard = () => {
   const clearMessages = () => {
     setError('');
     setSuccess('');
+  };
+
+  const openReviewModal = async (item, type) => {
+    setShowReviewModal(true);
+    setReviewItemType(type);
+    setReviewLoading(true);
+    
+    try {
+      let detailData;
+      if (type === 'loan') {
+        detailData = await officerService.getLoan(item.applicationId || item.id);
+        // Also get documents for this loan
+        const documents = await officerService.getLoanDocuments(item.applicationId || item.id);
+        detailData.documents = documents;
+      } else {
+        detailData = await officerService.getDocument(item.documentId || item.id);
+      }
+      setReviewItem(detailData);
+    } catch (error) {
+      setError(`Failed to load ${type} details`);
+      console.error(`${type} details error:`, error);
+      setShowReviewModal(false);
+    } finally {
+      setReviewLoading(false);
+    }
   };
 
   const getStatusBadge = (status) => {
@@ -341,9 +370,8 @@ const OfficerDashboard = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                           <button
-                            onClick={() => openStatusModal(loan, 'UNDER_REVIEW', 'loan')}
+                            onClick={() => openReviewModal(loan, 'loan')}
                             className="text-blue-600 hover:text-blue-900"
-                            disabled={loan.status === 'UNDER_REVIEW' || loan.status === 'APPROVED' || loan.status === 'REJECTED'}
                           >
                             Review
                           </button>
@@ -451,9 +479,8 @@ const OfficerDashboard = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                           <button
-                            onClick={() => openStatusModal(doc, 'UNDER_REVIEW', 'document')}
+                            onClick={() => openReviewModal(doc, 'document')}
                             className="text-blue-600 hover:text-blue-900"
-                            disabled={doc.status === 'UNDER_REVIEW' || doc.status === 'VERIFIED' || doc.status === 'REJECTED'}
                           >
                             Review
                           </button>
@@ -484,6 +511,257 @@ const OfficerDashboard = () => {
           </>
         )}
       </div>
+
+      {/* Review Modal */}
+      {showReviewModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-10 mx-auto p-5 border max-w-4xl shadow-lg rounded-md bg-white">
+            {reviewLoading ? (
+              <div className="flex justify-center items-center h-40">
+                <LoadingSpinner message="Loading details..." />
+              </div>
+            ) : reviewItem ? (
+              <div className="mt-3">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-xl font-semibold text-gray-900">
+                    {reviewItemType === 'loan' ? 'Loan Application Details' : 'Document Details'}
+                  </h3>
+                  <button
+                    onClick={() => setShowReviewModal(false)}
+                    className="text-gray-400 hover:text-gray-600 text-2xl"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {reviewItemType === 'loan' ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Loan Information */}
+                    <div className="space-y-4">
+                      <h4 className="text-lg font-medium text-gray-900 mb-4">Loan Information</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Application ID</label>
+                          <p className="text-lg font-semibold text-gray-900">#{reviewItem.applicationId}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Status</label>
+                          <div className="mt-1">{getStatusBadge(reviewItem.status)}</div>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Loan Amount</label>
+                          <p className="text-lg font-semibold text-gray-900">${reviewItem.loanAmount?.toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Term</label>
+                          <p className="text-gray-900">{reviewItem.loanTermMonths} months</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Interest Rate</label>
+                          <p className="text-gray-900">{reviewItem.interestRate}%</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Monthly Payment</label>
+                          <p className="text-gray-900">${reviewItem.monthlyPayment?.toLocaleString()}</p>
+                        </div>
+                        <div className="col-span-2">
+                          <label className="text-sm font-medium text-gray-500">Purpose</label>
+                          <p className="text-gray-900">{reviewItem.loanPurpose || 'Not specified'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Applied Date</label>
+                          <p className="text-gray-900">
+                            {reviewItem.appliedAtSource ? new Date(reviewItem.appliedAtSource).toLocaleDateString() : 'N/A'}
+                          </p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Last Updated</label>
+                          <p className="text-gray-900">
+                            {reviewItem.updatedAt ? new Date(reviewItem.updatedAt).toLocaleDateString() : 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Borrower Information */}
+                    <div className="space-y-4">
+                      <h4 className="text-lg font-medium text-gray-900 mb-4">Borrower Information</h4>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Name</label>
+                          <p className="text-gray-900">{reviewItem.borrowerName}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Borrower ID</label>
+                          <p className="text-gray-900">#{reviewItem.borrowerId}</p>
+                        </div>
+                        {reviewItem.statusUpdatedBy && (
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Last Updated By</label>
+                            <p className="text-gray-900">{reviewItem.statusUpdatedBy}</p>
+                          </div>
+                        )}
+                        {reviewItem.statusUpdatedAt && (
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Status Updated At</label>
+                            <p className="text-gray-900">
+                              {new Date(reviewItem.statusUpdatedAt).toLocaleString()}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Associated Documents */}
+                      {reviewItem.documents && reviewItem.documents.length > 0 && (
+                        <div className="mt-6">
+                          <h5 className="text-md font-medium text-gray-900 mb-3">Associated Documents</h5>
+                          <div className="space-y-2">
+                            {reviewItem.documents.map((doc) => (
+                              <div key={doc.documentId} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">{doc.fileName}</p>
+                                  <p className="text-xs text-gray-500">{doc.documentType}</p>
+                                </div>
+                                {getStatusBadge(doc.status)}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  /* Document Details */
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <h4 className="text-lg font-medium text-gray-900 mb-4">Document Information</h4>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Document ID</label>
+                          <p className="text-lg font-semibold text-gray-900">#{reviewItem.documentId}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Status</label>
+                          <div className="mt-1">{getStatusBadge(reviewItem.status)}</div>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">File Name</label>
+                          <p className="text-gray-900">{reviewItem.fileName}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Document Type</label>
+                          <p className="text-gray-900">{reviewItem.documentType}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">File Size</label>
+                          <p className="text-gray-900">{(reviewItem.fileSize / 1024).toFixed(1)} KB</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Content Type</label>
+                          <p className="text-gray-900">{reviewItem.contentType}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Uploaded Date</label>
+                          <p className="text-gray-900">
+                            {reviewItem.uploadedAtSource ? new Date(reviewItem.uploadedAtSource).toLocaleDateString() : 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h4 className="text-lg font-medium text-gray-900 mb-4">Related Information</h4>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Borrower</label>
+                          <p className="text-gray-900">{reviewItem.borrowerName}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Borrower ID</label>
+                          <p className="text-gray-900">#{reviewItem.borrowerId}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Loan Application</label>
+                          <p className="text-gray-900">
+                            {reviewItem.loanApplicationId ? `#${reviewItem.loanApplicationId}` : 'N/A'}
+                          </p>
+                        </div>
+                        {reviewItem.statusUpdatedBy && (
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Last Updated By</label>
+                            <p className="text-gray-900">{reviewItem.statusUpdatedBy}</p>
+                          </div>
+                        )}
+                        {reviewItem.statusUpdatedAt && (
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Status Updated At</label>
+                            <p className="text-gray-900">
+                              {new Date(reviewItem.statusUpdatedAt).toLocaleString()}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end space-x-4 mt-6 pt-6 border-t border-gray-200">
+                  <button
+                    onClick={() => setShowReviewModal(false)}
+                    className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400"
+                  >
+                    Close
+                  </button>
+                  {reviewItemType === 'loan' ? (
+                    <Link
+                      to={`/officer/review/${reviewItem.applicationId}`}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                      onClick={() => setShowReviewModal(false)}
+                    >
+                      Full Review Page
+                    </Link>
+                  ) : (
+                    <div className="space-x-2">
+                      {(reviewItem.status === 'PENDING' || reviewItem.status === 'UNDER_REVIEW') && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setShowReviewModal(false);
+                              openStatusModal(reviewItem, 'VERIFIED', 'document');
+                            }}
+                            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                          >
+                            Verify
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowReviewModal(false);
+                              openStatusModal(reviewItem, 'REJECTED', 'document');
+                            }}
+                            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-600">Failed to load details</p>
+                <button
+                  onClick={() => setShowReviewModal(false)}
+                  className="mt-4 px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400"
+                >
+                  Close
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Status Update Modal */}
       {showStatusModal && selectedItem && (

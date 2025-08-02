@@ -43,6 +43,12 @@ export const officerService = {
     return response.data;
   },
 
+  // Get specific document
+  getDocument: async (documentId) => {
+    const response = await api.get(`/admin/documents/${documentId}`);
+    return response.data;
+  },
+
   // Update document status
   updateDocumentStatus: async (documentId, statusData) => {
     const response = await api.put(`/admin/documents/${documentId}/status`, statusData);
