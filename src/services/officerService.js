@@ -66,6 +66,37 @@ export const officerService = {
     const response = await api.get('/admin/status/document-statuses');
     return response.data;
   },
+
+  // Loan Score APIs
+  // Get loan score for specific application
+  getLoanScore: async (applicationId) => {
+    const response = await api.get(`/admin/loans/${applicationId}/score`);
+    return response.data;
+  },
+
+  // Get all scores for a borrower
+  getBorrowerScores: async (borrowerId) => {
+    const response = await api.get(`/admin/borrowers/${borrowerId}/scores`);
+    return response.data;
+  },
+
+  // Get scores by grade
+  getScoresByGrade: async (grade) => {
+    const response = await api.get(`/admin/scores/grade/${grade}`);
+    return response.data;
+  },
+
+  // Get scores by risk level
+  getScoresByRisk: async (risk) => {
+    const response = await api.get(`/admin/scores/risk/${risk}`);
+    return response.data;
+  },
+
+  // Check loan score service status
+  getLoanScoreServiceStatus: async () => {
+    const response = await api.get('/admin/scores/service-status');
+    return response.data;
+  },
 };
 
 export default officerService;

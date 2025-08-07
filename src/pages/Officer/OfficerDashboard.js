@@ -21,6 +21,12 @@ const OfficerDashboard = () => {
   const [reviewItem, setReviewItem] = useState(null);
   const [reviewItemType, setReviewItemType] = useState('');
   const [reviewLoading, setReviewLoading] = useState(false);
+  
+  // Score-related state
+  const [loanScores, setLoanScores] = useState({});
+  const [showScoreModal, setShowScoreModal] = useState(false);
+  const [selectedScore, setSelectedScore] = useState(null);
+  const [scoreLoading, setScoreLoading] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -35,6 +41,12 @@ const OfficerDashboard = () => {
       ]);
       setLoans(loansData || []);
       setDocuments(documentsData || []);
+      
+      // Fetch loan scores for each loan
+      if (loansData && loansData.length > 0) {
+        await fetchLoanScores(loansData);
+      }
+      
       setError('');
     } catch (error) {
       setError('Failed to load dashboard data');
@@ -42,6 +54,22 @@ const OfficerDashboard = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchLoanScores = async (loansData) => {
+    const scores = {};
+    const scorePromises = loansData.map(async (loan) => {
+      try {
+        const score = await officerService.getLoanScore(loan.applicationId || loan.id);
+        scores[loan.applicationId || loan.id] = score;
+      } catch (error) {
+        // Score not available - this is okay, just means loan hasn't been processed yet
+        scores[loan.applicationId || loan.id] = null;
+      }
+    });
+    
+    await Promise.allSettled(scorePromises);
+    setLoanScores(scores);
   };
 
   const clearMessages = () => {
@@ -88,6 +116,50 @@ const OfficerDashboard = () => {
         {status}
       </span>
     );
+  };
+
+  const getScoreBadge = (score) => {
+    if (!score) {
+      return (
+        <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+          N/A
+        </span>
+      );
+    }
+
+    const gradeColors = {
+      EXCELLENT: 'bg-green-100 text-green-800',
+      GOOD: 'bg-blue-100 text-blue-800', 
+      FAIR: 'bg-yellow-100 text-yellow-800',
+      POOR: 'bg-red-100 text-red-800'
+    };
+
+    return (
+      <div className="flex flex-col items-center space-y-1">
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${gradeColors[score.scoreGrade] || 'bg-gray-100 text-gray-800'}`}>
+          {score.scoreGrade}
+        </span>
+        <span className="text-xs text-gray-600 font-medium">
+          {score.totalScore}/1000
+        </span>
+      </div>
+    );
+  };
+
+  const openScoreModal = async (applicationId) => {
+    setShowScoreModal(true);
+    setScoreLoading(true);
+    
+    try {
+      const score = await officerService.getLoanScore(applicationId);
+      setSelectedScore(score);
+    } catch (error) {
+      setError('Failed to load loan score details');
+      console.error('Score details error:', error);
+      setShowScoreModal(false);
+    } finally {
+      setScoreLoading(false);
+    }
   };
 
   const openStatusModal = (item, action, type) => {
@@ -334,6 +406,9 @@ const OfficerDashboard = () => {
                         Status
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Score
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Applied Date
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -363,6 +438,22 @@ const OfficerDashboard = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           {getStatusBadge(loan.status)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center space-x-2">
+                            {getScoreBadge(loanScores[loan.applicationId || loan.id])}
+                            {loanScores[loan.applicationId || loan.id] && (
+                              <button
+                                onClick={() => openScoreModal(loan.applicationId || loan.id)}
+                                className="text-blue-600 hover:text-blue-900 text-sm"
+                                title="View score details"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {loan.appliedAtSource ? new Date(loan.appliedAtSource).toLocaleDateString() : 
@@ -753,6 +844,168 @@ const OfficerDashboard = () => {
                 <p className="text-gray-600">Failed to load details</p>
                 <button
                   onClick={() => setShowReviewModal(false)}
+                  className="mt-4 px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400"
+                >
+                  Close
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Score Details Modal */}
+      {showScoreModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-10 mx-auto p-5 border max-w-4xl shadow-lg rounded-md bg-white">
+            {scoreLoading ? (
+              <div className="flex justify-center items-center h-40">
+                <LoadingSpinner message="Loading score details..." />
+              </div>
+            ) : selectedScore ? (
+              <div className="mt-3">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-xl font-semibold text-gray-900">Loan Score Details</h3>
+                  <button
+                    onClick={() => setShowScoreModal(false)}
+                    className="text-gray-400 hover:text-gray-600 text-2xl"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Score Summary */}
+                  <div className="space-y-4">
+                    <h4 className="text-lg font-medium text-gray-900 mb-4">Score Summary</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="text-center p-4 bg-gray-50 rounded-lg">
+                        <div className="text-3xl font-bold text-blue-600">{selectedScore.totalScore}</div>
+                        <div className="text-sm text-gray-600">Total Score</div>
+                        <div className="text-xs text-gray-500">out of 1000</div>
+                      </div>
+                      <div className="text-center p-4 bg-gray-50 rounded-lg">
+                        <div className={`text-2xl font-bold ${
+                          selectedScore.scoreGrade === 'EXCELLENT' ? 'text-green-600' :
+                          selectedScore.scoreGrade === 'GOOD' ? 'text-blue-600' :
+                          selectedScore.scoreGrade === 'FAIR' ? 'text-yellow-600' : 'text-red-600'
+                        }`}>
+                          {selectedScore.scoreGrade}
+                        </div>
+                        <div className="text-sm text-gray-600">Grade</div>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 gap-3">
+                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                        <span className="font-medium text-gray-700">Risk Assessment</span>
+                        <span className={`px-2 py-1 rounded text-sm font-medium ${
+                          selectedScore.riskAssessment === 'LOW' ? 'bg-green-100 text-green-800' :
+                          selectedScore.riskAssessment === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {selectedScore.riskAssessment}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                        <span className="font-medium text-gray-700">Calculated Date</span>
+                        <span className="text-gray-900">
+                          {selectedScore.calculatedAt ? new Date(selectedScore.calculatedAt).toLocaleDateString() : 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                        <span className="font-medium text-gray-700">Application ID</span>
+                        <span className="text-gray-900">#{selectedScore.applicationId}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                        <span className="font-medium text-gray-700">Borrower ID</span>
+                        <span className="text-gray-900">#{selectedScore.borrowerId}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Score Breakdown */}
+                  <div className="space-y-4">
+                    <h4 className="text-lg font-medium text-gray-900 mb-4">Score Breakdown</h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center p-3 bg-green-50 rounded">
+                        <span className="font-medium text-gray-700">Employment</span>
+                        <div className="text-right">
+                          <div className="font-bold text-green-600">{selectedScore.employmentScore || 0}</div>
+                          <div className="text-xs text-gray-500">Employment Score</div>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-blue-50 rounded">
+                        <span className="font-medium text-gray-700">Income</span>
+                        <div className="text-right">
+                          <div className="font-bold text-blue-600">{selectedScore.incomeScore || 0}</div>
+                          <div className="text-xs text-gray-500">Income Score</div>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-purple-50 rounded">
+                        <span className="font-medium text-gray-700">Loan Amount</span>
+                        <div className="text-right">
+                          <div className="font-bold text-purple-600">{selectedScore.loanAmountScore || 0}</div>
+                          <div className="text-xs text-gray-500">Loan Amount Score</div>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-yellow-50 rounded">
+                        <span className="font-medium text-gray-700">Interest Rate</span>
+                        <div className="text-right">
+                          <div className="font-bold text-yellow-600">{selectedScore.interestRateScore || 0}</div>
+                          <div className="text-xs text-gray-500">Interest Rate Score</div>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-indigo-50 rounded">
+                        <span className="font-medium text-gray-700">Employment Years</span>
+                        <div className="text-right">
+                          <div className="font-bold text-indigo-600">{selectedScore.employmentYearsScore || 0}</div>
+                          <div className="text-xs text-gray-500">Employment Years Score</div>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-pink-50 rounded">
+                        <span className="font-medium text-gray-700">Loan Term</span>
+                        <div className="text-right">
+                          <div className="font-bold text-pink-600">{selectedScore.loanTermScore || 0}</div>
+                          <div className="text-xs text-gray-500">Loan Term Score</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Debt to Income Ratio */}
+                    {selectedScore.debtToIncomeRatio && (
+                      <div className="mt-4">
+                        <h5 className="text-md font-medium text-gray-900 mb-2">Debt to Income Ratio</h5>
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                          <p className="text-lg font-semibold text-gray-900">{selectedScore.debtToIncomeRatio}%</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedScore.scoringReason && (
+                      <div className="mt-6">
+                        <h5 className="text-md font-medium text-gray-900 mb-2">Scoring Reason</h5>
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                          <p className="text-sm text-gray-700">{selectedScore.scoringReason}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-4 mt-6 pt-6 border-t border-gray-200">
+                  <button
+                    onClick={() => setShowScoreModal(false)}
+                    className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-600">Failed to load score details</p>
+                <button
+                  onClick={() => setShowScoreModal(false)}
                   className="mt-4 px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400"
                 >
                   Close
