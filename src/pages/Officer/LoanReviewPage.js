@@ -199,27 +199,23 @@ const LoanReviewPage = () => {
                 <div className="space-y-3">
                   <div>
                     <label className="text-sm font-medium text-gray-500">Name</label>
-                    <p className="text-gray-900">
-                      {loan.borrower?.firstName} {loan.borrower?.lastName}
-                    </p>
+                    <p className="text-gray-900">{loan.borrowerName}</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-500">Email</label>
-                    <p className="text-gray-900">{loan.borrower?.email}</p>
+                    <p className="text-gray-900">{loan.borrowerEmail || 'Not provided'}</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-500">Phone</label>
-                    <p className="text-gray-900">{loan.borrower?.phoneNumber || 'Not provided'}</p>
+                    <p className="text-gray-900">{loan.borrowerPhoneNumber || 'Not provided'}</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-500">Annual Income</label>
-                    <p className="text-gray-900">
-                      ${loan.borrower?.annualIncome?.toLocaleString() || 'Not provided'}
-                    </p>
+                    <p className="text-gray-900">{loan.borrowerAnnualIncome !== undefined ? `$${loan.borrowerAnnualIncome}` : 'Not provided'}</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-500">Employment Status</label>
-                    <p className="text-gray-900">{loan.borrower?.employmentStatus || 'Not provided'}</p>
+                    <p className="text-gray-900">{loan.borrowerEmploymentStatus || 'Not provided'}</p>
                   </div>
                 </div>
               </div>

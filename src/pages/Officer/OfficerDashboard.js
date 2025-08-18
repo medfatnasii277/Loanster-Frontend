@@ -718,6 +718,22 @@ const OfficerDashboard = () => {
                           <label className="text-sm font-medium text-gray-500">Borrower ID</label>
                           <p className="text-gray-900">#{reviewItem.borrowerId}</p>
                         </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Email</label>
+                          <p className="text-gray-900">{reviewItem.borrowerEmail || 'Not provided'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Phone</label>
+                          <p className="text-gray-900">{reviewItem.borrowerPhoneNumber || 'Not provided'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Annual Income</label>
+                          <p className="text-gray-900">{reviewItem.borrowerAnnualIncome !== undefined ? `$${reviewItem.borrowerAnnualIncome}` : 'Not provided'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Employment Status</label>
+                          <p className="text-gray-900">{reviewItem.borrowerEmploymentStatus || 'Not provided'}</p>
+                        </div>
                         {reviewItem.statusUpdatedBy && (
                           <div>
                             <label className="text-sm font-medium text-gray-500">Last Updated By</label>
