@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import borrowerService from '../../services/borrowerService';
 import LoadingSpinner from '../../components/Common/LoadingSpinner';
+import DocumentDetailsModal from '../../components/Modals/DocumentDetailsModal';
 
 const DocumentsPage = () => {
   const { user, borrowerProfile, hasProfile, borrowerId } = useAuth();
@@ -10,6 +11,8 @@ const DocumentsPage = () => {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [selectedDocumentId, setSelectedDocumentId] = useState(null);
+  const [showDocumentModal, setShowDocumentModal] = useState(false);
 
   const [uploadData, setUploadData] = useState({
     documentName: '',
@@ -25,9 +28,13 @@ const DocumentsPage = () => {
           console.log('📄 Fetching documents for borrower ID:', borrowerId);
           const documentsData = await borrowerService.getDocuments(borrowerId);
           setDocuments(documentsData);
+          setError(''); // Clear error on successful fetch
         }
       } catch (error) {
-        if (error.response?.status !== 404) {
+        if (error.response?.status === 404) {
+          setDocuments([]); // No documents found
+          setError(''); // Don't show error for 404
+        } else {
           setError('Failed to load documents');
         }
       } finally {
@@ -37,6 +44,16 @@ const DocumentsPage = () => {
 
     fetchDocuments();
   }, [hasProfile, borrowerId]); // Re-run when profile status changes
+
+  const handleViewDocumentDetails = (documentId) => {
+    setSelectedDocumentId(documentId);
+    setShowDocumentModal(true);
+  };
+
+  const handleCloseDocumentModal = () => {
+    setShowDocumentModal(false);
+    setSelectedDocumentId(null);
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -79,6 +96,7 @@ const DocumentsPage = () => {
 
     try {
       const formData = new FormData();
+      // Remove documentName from FormData
       formData.append('file', uploadData.file);
       formData.append('documentName', uploadData.documentName);
       formData.append('documentType', uploadData.documentType);
@@ -169,7 +187,8 @@ const DocumentsPage = () => {
         <p className="text-gray-600 mt-2">Upload and manage your loan application documents</p>
       </div>
 
-      {error && (
+      {/* Show error only if not uploading and not after upload attempt */}
+      {error && !uploading && (
         <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-md">
           {error}
         </div>
@@ -307,7 +326,10 @@ const DocumentsPage = () => {
                       {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button className="text-blue-600 hover:text-blue-900 mr-4">
+                      <button 
+                        className="text-blue-600 hover:text-blue-900 mr-4"
+                        onClick={() => handleViewDocumentDetails(doc.id)}
+                      >
                         View
                       </button>
                       <button className="text-red-600 hover:text-red-900">
@@ -321,6 +343,13 @@ const DocumentsPage = () => {
           </div>
         )}
       </div>
+
+      {/* Document Details Modal */}
+      <DocumentDetailsModal
+        isOpen={showDocumentModal}
+        onClose={handleCloseDocumentModal}
+        documentId={selectedDocumentId}
+      />
     </div>
   );
 };

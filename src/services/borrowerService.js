@@ -46,6 +46,18 @@ export const borrowerService = {
     return response.data;
   },
 
+  // Get detailed loan application from borrower service
+  getLoanApplicationDetails: async (borrowerId, loanId) => {
+    const response = await api.get(`/api/borrowers/${borrowerId}/loans/${loanId}`);
+    return response.data;
+  },
+
+  // Get detailed document from borrower service
+  getDocumentDetails: async (borrowerId, documentId) => {
+    const response = await api.get(`/api/borrowers/${borrowerId}/documents/${documentId}`);
+    return response.data;
+  },
+
   // Upload document
   uploadDocument: async (borrowerId, formData) => {
     const response = await api.post(`/api/borrowers/${borrowerId}/documents`, formData, {
